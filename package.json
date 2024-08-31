@@ -1,38 +1,46 @@
 {
   "name": "blueswarm",
   "version": "0.1.0",
-  "description": ".",
+  "description": "Find and connect to nearby peers over Bluetooth LE",
+  "author": "Tomas Ravinskas <tomas@tomasrav.me> (https://tomasrav.me/)",
+  "license": "MIT",
+  "homepage": "https://github.com/OzymandiasTheGreat/blueswarm#readme",
+  "repository": "https://github.com/OzymandiasTheGreat/blueswarm",
   "main": "build/index.js",
   "types": "build/index.d.ts",
+  "files": [
+    "android/build.gradle",
+    "android/src",
+    "build/",
+    "ios/",
+    "plugin/",
+    "src/",
+    "expo-module.config.json",
+    "NOTICE"
+  ],
   "scripts": {
-    "build": "expo-module build",
-    "clean": "expo-module clean",
-    "lint": "expo-module lint",
-    "test": "expo-module test",
-    "prepare": "expo-module prepare",
-    "prepublishOnly": "expo-module prepublishOnly",
-    "expo-module": "expo-module",
-    "open:ios": "xed example/ios",
-    "open:android": "open -a \"Android Studio\" example/android"
+    "build": "tsc",
+    "watch": "tsc -w",
+    "clean": "rm -rf build/ plugin/build/ node_modules/ yarn.lock",
+    "plugin": "tsc -p plugin/"
   },
   "keywords": [
     "react-native",
     "expo",
-    "blueswarm",
-    "BlueSwarm"
+    "bluetooth le"
   ],
-  "repository": "https://github.com/OzymandiasTheGreat/blueswarm",
-  "bugs": {
-    "url": "https://github.com/OzymandiasTheGreat/blueswarm/issues"
+  "dependencies": {
+    "b4a": "^1.6.6",
+    "events": "npm:bare-events",
+    "ready-resource": "^1.1.1",
+    "streamx": "^2.19.1"
   },
-  "author": "Tomas Ravinskas <tomas@tomasrav.me> (https://tomasrav.me/)",
-  "license": "MIT",
-  "homepage": "https://github.com/OzymandiasTheGreat/blueswarm#readme",
-  "dependencies": {},
   "devDependencies": {
+    "@expo/config-plugins": "^8.0.8",
+    "@types/b4a": "^1.6.4",
     "@types/react": "^18.0.25",
-    "expo-module-scripts": "^3.5.2",
-    "expo-modules-core": "^1.12.20"
+    "expo-modules-core": "^1.12.20",
+    "typescript": "~5.3.3"
   },
   "peerDependencies": {
     "expo": "*",

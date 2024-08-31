@@ -1,47 +1,99 @@
 package me.tomasrav.blueswarm
 
+import android.content.Context
+import expo.modules.kotlin.Promise
+import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.kotlin.types.Enumerable
+import java.util.UUID
+
+const val CCCD_UUID = "00002902-0000-1000-8000-00805f9b34fb"
+const val MIN_MTU = 20
+
+enum class BlueSwarmEvent(val value: String): Enumerable {
+  SERVER_CONNECTION("server-connection"),
+  SERVER_DISCONNECT("server-disconnect"),
+  SERVER_DATA("server-data"),
+  CLIENT_CONNECTION("client-connection"),
+  CLIENT_DISCONNECT("client-disconnect"),
+  CLIENT_DATA("client-data"),
+}
 
 class BlueSwarmModule : Module() {
-  // Each module class must implement the definition function. The definition consists of components
-  // that describes the module's functionality and behavior.
-  // See https://docs.expo.dev/modules/module-api for more details about available components.
+  val context: Context
+    get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+  var server: BlueSwarmServer? = null
+  var client: BlueSwarmClient? = null
+
   override fun definition() = ModuleDefinition {
-    // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
-    // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
-    // The module will be accessible from `requireNativeModule('BlueSwarm')` in JavaScript.
     Name("BlueSwarm")
 
-    // Sets constant properties on the module. Can take a dictionary or a closure that returns a dictionary.
-    Constants(
-      "PI" to Math.PI
+    Events(
+            "client-data",
+            "server-connection",
+            "server-disconnect",
+            "server-data",
+            "client-connection",
+            "client-disconnect",
     )
 
-    // Defines event names that the module can send to JavaScript.
-    Events("onChange")
-
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      "Hello world! 👋"
+    AsyncFunction("initServer") { service: String, characteristic: String, promise: Promise ->
+      if (server == null) server = BlueSwarmServer(this@BlueSwarmModule, UUID.fromString(service), UUID.fromString(characteristic))
+      promise.resolve()
     }
 
-    // Defines a JavaScript function that always returns a Promise and whose native code
-    // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("setValueAsync") { value: String ->
-      // Send an event to JavaScript.
-      sendEvent("onChange", mapOf(
-        "value" to value
-      ))
+    AsyncFunction("initClient") { service: String, characteristic: String, promise: Promise ->
+      if (client == null) client = BlueSwarmClient(this@BlueSwarmModule, UUID.fromString(service), UUID.fromString(characteristic))
+      promise.resolve()
     }
 
-    // Enables the module to be used as a native view. Definition components that are accepted as part of
-    // the view definition: Prop, Events.
-    View(BlueSwarmView::class) {
-      // Defines a setter for the `name` prop.
-      Prop("name") { view: BlueSwarmView, prop: String ->
-        println(prop)
-      }
+    Function("close") {
+      server?.close()
+      server = null
+      client?.close()
+      client = null
+      return@Function null
+    }
+
+    Function("isAdvertising") {
+      return@Function server?.advertising == true
+    }
+
+    Function("isScanning") {
+      return@Function client?.scanning == true
+    }
+
+    Function("serverAdvertise") {
+      server?.advertise()
+    }
+
+    Function("serverStop") {
+      server?.stop()
+    }
+
+    Function("serverDisconnect") { identifier: String ->
+      server?.disconnect(identifier)
+    }
+
+    AsyncFunction("serverNotify") { identifier: String, data: ByteArray, promise: Promise ->
+      server?.notify(identifier, data, promise)
+    }
+
+    Function("clientScan") {
+      client?.scan()
+    }
+
+    Function("clientStop") {
+      client?.stop()
+    }
+
+    Function("clientDisconnect") { identifier: String ->
+      client?.disconnect(identifier)
+    }
+
+    AsyncFunction("clientWrite") { identifier: String, data: ByteArray, promise: Promise ->
+      client?.write(identifier, data, promise)
     }
   }
 }

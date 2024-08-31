@@ -1,16 +1,13 @@
 {
   "compilerOptions": {
-    "outDir": "./build",
     "target": "esnext",
     "lib": ["dom", "esnext"],
     "jsx": "react-native",
+    "outDir": "./build",
+    "rootDir": "src",
     "moduleResolution": "node",
     "esModuleInterop": true,
     "sourceMap": true,
-    "typeRoots": [
-      "./node_modules/@types",
-      "./types"
-    ],
     "declaration": true,
     "declarationMap": true,
     "inlineSources": true,

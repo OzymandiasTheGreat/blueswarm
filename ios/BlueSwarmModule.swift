@@ -1,44 +1,117 @@
+import CoreBluetooth
 import ExpoModulesCore
 
+enum BlueSwarmEvent: String, Enumerable {
+  case SERVER_CONNECTED = "serverConnected"
+  case SERVER_DISCONNECTED = "serverDisconnected"
+  case SERVER_WRITE_REQUEST = "serverWriteRequest"
+  case CLIENT_DEVICE_DISCOVERED = "clientDeviceDiscovered"
+  case CLIENT_CONNECTED = "clientConnected"
+  case CLIENT_DISCONNECTED = "clientDisconnected"
+  case CLIENT_NOTIFIED = "clientNotified"
+}
+
 public class BlueSwarmModule: Module {
-  // Each module class must implement the definition function. The definition consists of components
-  // that describes the module's functionality and behavior.
-  // See https://docs.expo.dev/modules/module-api for more details about available components.
+  private var server: BlueSwarmServer? = nil
+  private var client: BlueSwarmClient? = nil
+  
+  public func isConnecting(deviceID: String) -> Bool {
+    return client?.isConnecting(deviceID: deviceID) == true
+  }
+  
+  public func isConnected(deviceID: String) -> Bool {
+    return server?.isConnected(deviceID: deviceID) == true || client?.isConnected(deviceID: deviceID) == true
+  }
+  
   public func definition() -> ModuleDefinition {
-    // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
-    // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
-    // The module will be accessible from `requireNativeModule('BlueSwarm')` in JavaScript.
     Name("BlueSwarm")
 
-    // Sets constant properties on the module. Can take a dictionary or a closure that returns a dictionary.
-    Constants([
-      "PI": Double.pi
-    ])
-
-    // Defines event names that the module can send to JavaScript.
-    Events("onChange")
-
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      return "Hello world! 👋"
+    Events(
+      "serverConnected",
+      "serverDisconnected",
+      "serverWriteRequest",
+      "clientDeviceDiscovered",
+      "clientConnected",
+      "clientDisconnected",
+      "clientNotified"
+    )
+    
+    Property("isInitialized") { () -> Bool in
+      return server != nil || client != nil
+    }
+    
+    Property("isAdvertising") { () -> Bool in
+      return server?.isAdvertising() ?? false
+    }
+    
+    Property("isScanning") { () -> Bool in
+      return client?.isScanning() ?? false
     }
 
-    // Defines a JavaScript function that always returns a Promise and whose native code
-    // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("setValueAsync") { (value: String) in
-      // Send an event to JavaScript.
-      self.sendEvent("onChange", [
-        "value": value
-      ])
+    AsyncFunction("initializeServer") { (serviceUUID: String, characteristicUUID: String, promise: Promise) in
+      let service = CBUUID(string: serviceUUID)
+      let characteristic = CBUUID(string: characteristicUUID)
+      if (server == nil) { server = BLESwarmServer(module: self, serviceUUID: service, characteristicUUID: characteristic, promise: promise) }
     }
-
-    // Enables the module to be used as a native view. Definition components that are accepted as part of the
-    // view definition: Prop, Events.
-    View(BlueSwarmView.self) {
-      // Defines a setter for the `name` prop.
-      Prop("name") { (view: BlueSwarmView, prop: String) in
-        print(prop)
-      }
+    
+    Function("closeServer") {
+      server?.close()
+      server = nil
+    }
+    
+    AsyncFunction("initializeClient") { (serviceUUID: String, characteristicUUID: String, promise: Promise) in
+      let service = CBUUID(string: serviceUUID)
+      let characteristic = CBUUID(string: characteristicUUID)
+      if (client == nil) { client = BLESwarmClient(module: self, serviceUUID: service, characteristicUUID: characteristic, promise: promise) }
+    }
+    
+    Function("closeClient") {
+      client?.close()
+      client = nil
+    }
+    
+    Function("isConnecting") { (deviceID: String) -> Bool in
+      return isConnecting(deviceID: deviceID)
+    }
+    
+    Function("isConnected") { (deviceID: String) -> Bool in
+      return isConnected(deviceID: deviceID)
+    }
+    
+    Function("startAdvertising") {
+      server?.startAdvertising()
+    }
+    
+    Function("stopAdvertising") {
+      server?.stopAdvertising()
+    }
+    
+    Function("cancelServerConnection") { (deviceID: String) in
+      server?.disconnect(deviceID: deviceID)
+    }
+    
+    AsyncFunction("notify") { (deviceID: String, data: Data, promise: Promise) in
+      server?.notify(deviceID: deviceID, data: data, promise: promise)
+    }
+    
+    Function("startScan") {
+      client?.startScan()
+    }
+    
+    Function("stopScan") {
+      client?.stopScan()
+    }
+    
+    Function("connect") { (deviceID: String) in
+      client?.connect(deviceID: deviceID)
+    }
+    
+    Function("disconnect") { (deviceID: String) in
+      client?.disconnect(deviceID: deviceID)
+    }
+    
+    AsyncFunction("write") { (deviceID: String, data: Data, promise: Promise) in
+      client?.write(deviceID: deviceID, data: data, promise: promise)
     }
   }
 }

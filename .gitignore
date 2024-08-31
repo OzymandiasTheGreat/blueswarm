@@ -43,9 +43,6 @@ android/keystores/debug.keystore
 #
 example/ios/Pods
 
-# Ruby
-example/vendor/
-
 # node.js
 #
 node_modules/
@@ -55,3 +52,5 @@ yarn-error.log
 
 # Expo
 .expo/*
+
+yarn.lock

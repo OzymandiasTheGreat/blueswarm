@@ -5,6 +5,10 @@
     "paths": {
       "blueswarm": ["../src/index"],
       "blueswarm/*": ["../src/*"]
-    }
+    },
+    "typeRoots": [
+      "./node_modules/@types",
+      "../types"
+    ]
   }
 }
