@@ -1,35 +1,81 @@
 # blueswarm
 
-.
+Find and connect to nearby peers over Bluetooth LE.
 
-# API documentation
+## Usage
 
-- [Documentation for the main branch](https://github.com/expo/expo/blob/main/docs/pages/versions/unversioned/sdk/blueswarm.md)
-- [Documentation for the latest stable release](https://docs.expo.dev/versions/latest/sdk/blueswarm/)
+```typescript
+import BlueSwarm from "blueswarm"
 
-# Installation in managed Expo projects
+const swarm = new BlueSwarm(serviceUUID, characteristicUUID)
 
-For [managed](https://docs.expo.dev/archive/managed-vs-bare/) Expo projects, please follow the installation instructions in the [API documentation for the latest stable release](#api-documentation). If you follow the link and there is no documentation available then this library is not yet usable within managed projects &mdash; it is likely to be included in an upcoming Expo SDK release.
+swarm.on("connection", (socket) => {
+  // socket is a Duplex stream, pipe it somewhere
+  socket.on("error", console.error)
+})
 
-# Installation in bare React Native projects
+await swarm.ready()
 
-For bare React Native projects, you must ensure that you have [installed and configured the `expo` package](https://docs.expo.dev/bare/installing-expo-modules/) before continuing.
+swarm.join({ advertise: true, scan: true })
 
-### Add the package to your npm dependencies
-
+// When you're done
+await swarm.close()
 ```
-npm install blueswarm
-```
 
-### Configure for iOS
+## API
 
-Run `npx pod-install` after installing the npm package.
+### `const swarm = new BlueSwarm(serviceUUID: string, characteristicUUID: string)`
 
+Construct a new BlueSwarm instance. `serviceUUID` and `characteristicUUID` must be valid UUIDs formatted to string.
 
-### Configure for Android
+### `swarm.serviceUUID: string`
 
+The service UUID used to discover peers and exchange data.
 
+### `swarm.characteristicUUID: string`
 
-# Contributing
+The characteristic UUID used to exchange data.
 
-Contributions are very welcome! Please refer to guidelines described in the [contributing guide]( https://github.com/expo/expo#contributing).
+### `swarm.connections: Set<Socket>`
+
+A set of currently active connections.
+
+### `swarm.advertising: boolean`
+
+Whether the swarm is currently advertising.
+
+### `swarm.scanning: boolean`
+
+Whether the swarm is actively scanning for new devices.
+
+### `await swarm.ready()`
+
+Initialize the swarm. Must be called once on startup. The swarm won't initiate or accept connections until this resolves.
+
+### `await swarm.close()`
+
+Close all active connections and free up resources. The swarm cannot be used after calling this.
+
+### `swarm.join({ advertise = true, scan = true })`
+
+Join the swarm! Starts advertising this device as connectable and/or scanning for compatible devices to connect to.
+
+### `swarm.leave()`
+
+Stop scanning and advertising. This does not affect existing connections. It's a good idea to call this once you have a few connections to save battery life.
+
+### `swarm.on("update", () => {})`
+
+Emitted when internal state changes, e.g. connection/disconnect.
+
+### `swarm.on("connection", (socket) => {})`
+
+Emitted whenever swarm connects to a new device.
+
+### `socket.client: boolean`
+
+Whether this connection is in client mode.
+
+### `socket.server: boolean`
+
+Whether this connection is in server mode.
