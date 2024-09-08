@@ -7,57 +7,38 @@ class BlueSwarmClient: NSObject {
   private let serviceUUID: CBUUID
   private let characteristicUUID: CBUUID
   private let manager = CBCentralManager()
-  private var discoveredDevices: [String: CBPeripheral] = [:]
-  private var connectingDevices: [String: CBPeripheral] = [:]
-  private var connectedDevices: [String: CBPeripheral] = [:]
+  private var initPromise: Promise?
+  private var connecting: Set<CBPeripheral> = []
+  private var devices: [String: CBPeripheral] = [:]
   private var writePromise: [String: Promise] = [:]
-  private let promise: Promise
 
   init(module: BlueSwarmModule, serviceUUID: CBUUID, characteristicUUID: CBUUID, promise: Promise) {
     self.module = module
+    initPromise = promise
     self.serviceUUID = serviceUUID
     self.characteristicUUID = characteristicUUID
-    self.promise = promise
-    super.init()
+     super.init()
     manager.delegate = self
   }
-
-  func isScanning() -> Bool {
-    return manager.state == .poweredOn && manager.isScanning
+  
+  var scanning: Bool {
+    get { manager.state == .poweredOn && manager.isScanning }
   }
 
-  func isConnecting(deviceID: String) -> Bool {
-    return connectingDevices[deviceID] != nil
-  }
-
-  func isConnected(deviceID: String) -> Bool {
-    return connectedDevices[deviceID] != nil
-  }
-
-  func startScan() {
-    if (!manager.isScanning) {
+  func scan() {
+    if (manager.state == .poweredOn && !scanning) {
       manager.scanForPeripherals(withServices: [serviceUUID])
     }
   }
 
-  func stopScan() {
-    if (manager.isScanning) {
+  func stop() {
+    if (scanning) {
       manager.stopScan()
     }
   }
 
-  func connect(deviceID: String) {
-    if (module.isConnected(deviceID: deviceID) || module.isConnecting(deviceID: deviceID)) {
-      return
-    }
-    guard let peripheral = discoveredDevices[deviceID] else {
-      return
-    }
-    manager.connect(peripheral)
-  }
-
-  func disconnect(deviceID: String) {
-    guard let peripheral = connectedDevices.removeValue(forKey: deviceID) ?? connectingDevices.removeValue(forKey: deviceID) else { return }
+  func disconnect(identifier: String) {
+    guard let peripheral = devices.removeValue(forKey: identifier) else { return }
     if let service = peripheral.services?.first(where: { $0.uuid == serviceUUID }) {
       if let characteristic = service.characteristics?.first(where: { $0.uuid == characteristicUUID }) {
         peripheral.setNotifyValue(false, for: characteristic)
@@ -66,129 +47,96 @@ class BlueSwarmClient: NSObject {
     manager.cancelPeripheralConnection(peripheral)
   }
 
-  func write(deviceID: String, data: Data, promise: Promise) {
-    guard let peripheral = connectedDevices[deviceID] else { return }
-    guard let service = peripheral.services?.first(where: { $0.uuid == serviceUUID }) else { return }
-    guard let characteristic = service.characteristics?.first(where: { $0.uuid == characteristicUUID }) else { return }
-    if (writePromise[deviceID] != nil) {
-      return promise.reject(WriteError(client: true))
+  func write(identifier: String, data: Data, promise: Promise) {
+    guard let peripheral = devices[identifier] else { return promise.reject("DEVICE_NOT_FOUND", "No connected client device with id \(identifier)") }
+    guard let service = peripheral.services?.first(where: { $0.uuid == serviceUUID }) else { return promise.reject("INVALID_DEVICE", "Device \(identifier) doesn't support writing") }
+    guard let characteristic = service.characteristics?.first(where: { $0.uuid == characteristicUUID }) else { return promise.reject("INVALID_DEVICE", "Device \(identifier) doesn't support writing") }
+    if (writePromise[identifier] != nil) {
+      return promise.reject("UNRESOLVED_WRITE", "Previous write hasn't resolved yet")
     }
-    writePromise[deviceID] = promise
+    writePromise[identifier] = promise
     peripheral.writeValue(data, for: characteristic, type: .withResponse)
   }
 
   func close() {
-    stopScan()
-    for peripheral in connectingDevices.values {
+    stop()
+    for peripheral in devices.values {
       manager.cancelPeripheralConnection(peripheral)
     }
-    for peripheral in connectedDevices.values {
-      manager.cancelPeripheralConnection(peripheral)
+    for promise in writePromise.values {
+      promise.reject("SESSION_CLOSED", "Session is closed")
     }
-    discoveredDevices.removeAll()
+    initPromise?.reject("SESSION_CLOSED", "Session is closed")
   }
 }
 
 extension BlueSwarmClient: CBCentralManagerDelegate {
   func centralManagerDidUpdateState(_ central: CBCentralManager) {
     if (central.state == .poweredOn) {
-      promise.resolve()
+      initPromise?.resolve()
+      initPromise = nil
     } else {
       let reason: String
       switch (central.state) {
-      case .poweredOff: reason = ".poweredOff"
-      case .resetting: reason = ".resetting"
-      case .unauthorized: reason = ".unauthorized"
-      case .unsupported: reason = ".unsupported"
-      case .unknown: reason = ".unknown"
-      default: reason = ".unexpected"
+        case .poweredOff: reason = ".poweredOff"
+        case .resetting: reason = ".resetting"
+        case .unauthorized: reason = ".unauthorized"
+        case .unsupported: reason = ".unsupported"
+        case .unknown: reason = ".unknown"
+        default: reason = ".unexpected"
       }
-      promise.reject("BLUETOOTH_NOT_AVAILABLE", "Bluetooth not available. Reason: \(reason)")
+      initPromise?.reject("BLUETOOTH_NOT_AVAILABLE", "Bluetooth not available. Reason: \(reason)")
+      initPromise = nil
     }
   }
 
   func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
-    let deviceID = peripheral.identifier.uuidString
-    if (module.isConnected(deviceID: deviceID) || module.isConnecting(deviceID: deviceID)) {
-      return
-    }
-    discoveredDevices[deviceID] = peripheral
-    module.sendEvent(BLESwarmEvent.CLIENT_DEVICE_DISCOVERED.rawValue, [
-      "device": deviceID
-    ])
+    connecting.insert(peripheral)
+    manager.connect(peripheral)
   }
 
   func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-    let deviceID = peripheral.identifier.uuidString
-    if (module.isConnecting(deviceID: deviceID) || module.isConnected(deviceID: deviceID)) {
-      manager.cancelPeripheralConnection(peripheral)
-      return
-    }
-    connectingDevices[deviceID] = peripheral
     peripheral.delegate = self
     peripheral.discoverServices([serviceUUID])
   }
 
   func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-    let deviceID = peripheral.identifier.uuidString
-    discoveredDevices.removeValue(forKey: deviceID)
-    connectingDevices.removeValue(forKey: deviceID)
-    connectedDevices.removeValue(forKey: deviceID)
-    writePromise[deviceID]?.reject(DestroyedError(client: true))
-    writePromise.removeValue(forKey: deviceID)
-    module.sendEvent(BLESwarmEvent.CLIENT_DISCONNECTED.rawValue, [
-      "device": deviceID
+    let id = peripheral.identifier.uuidString
+    connecting.remove(peripheral)
+    devices.removeValue(forKey: id)
+    writePromise.removeValue(forKey: id)?.reject("CONNECTION_CLOSED", "Connection is closed")
+    module.sendEvent(BlueSwarmEvent.CLIENT_DISCONNECT.rawValue, [
+      "id": id
     ])
   }
 }
 
 extension BlueSwarmClient: CBPeripheralDelegate {
-  func cancelConnection(peripheral: CBPeripheral) {
-    let deviceID = peripheral.identifier.uuidString
-    manager.cancelPeripheralConnection(peripheral)
-    discoveredDevices.removeValue(forKey: deviceID)
-    connectingDevices.removeValue(forKey: deviceID)
-    connectedDevices.removeValue(forKey: deviceID)
-    writePromise[deviceID]?.reject(DestroyedError(client: true))
-    writePromise.removeValue(forKey: deviceID)
-  }
-
   func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-    let deviceID = peripheral.identifier.uuidString
-    if (module.isConnected(deviceID: deviceID)) {
-      return cancelConnection(peripheral: peripheral)
-    }
     guard let service = peripheral.services?.first(where: { $0.uuid == serviceUUID }) else {
-      return cancelConnection(peripheral: peripheral)
+      return manager.cancelPeripheralConnection(peripheral)
     }
     peripheral.discoverCharacteristics([characteristicUUID], for: service)
   }
 
   func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
-    let deviceID = peripheral.identifier.uuidString
-    if (module.isConnected(deviceID: deviceID)) {
-      return cancelConnection(peripheral: peripheral)
-    }
     guard let characteristic = service.characteristics?.first(where: { $0.uuid == characteristicUUID }) else {
-      return cancelConnection(peripheral: peripheral)
+      return manager.cancelPeripheralConnection(peripheral)
     }
     peripheral.setNotifyValue(true, for: characteristic)
   }
 
   func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
-    let deviceID = peripheral.identifier.uuidString
-    if (module.isConnected(deviceID: deviceID)) {
-      return cancelConnection(peripheral: peripheral)
-    }
+    let id = peripheral.identifier.uuidString
     if (characteristic.isNotifying) {
-      connectedDevices[deviceID] = connectingDevices.removeValue(forKey: deviceID) ?? peripheral
+      devices[id] = peripheral
       let mtu = peripheral.maximumWriteValueLength(for: .withoutResponse)
-      module.sendEvent(BLESwarmEvent.CLIENT_CONNECTED.rawValue, [
-        "device": deviceID,
+      module.sendEvent(BlueSwarmEvent.CLIENT_CONNECTION.rawValue, [
+        "id": id,
         "mtu": mtu,
       ])
     } else {
-      cancelConnection(peripheral: peripheral)
+      manager.cancelPeripheralConnection(peripheral)
     }
   }
 
@@ -196,22 +144,18 @@ extension BlueSwarmClient: CBPeripheralDelegate {
     guard error == nil else { return }
     guard characteristic.uuid == characteristicUUID else { return }
     let value = characteristic.value ?? Data()
-    module.sendEvent(BLESwarmEvent.CLIENT_NOTIFIED.rawValue, [
-      "device": peripheral.identifier.uuidString,
-      "service": characteristic.service!.uuid.uuidString,
-      "characteristic": characteristic.uuid.uuidString,
-      "value": value,
+    module.sendEvent(BlueSwarmEvent.CLIENT_DATA.rawValue, [
+      "id": peripheral.identifier.uuidString,
+      "data": value,
     ])
   }
 
   func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
-    let deviceID = peripheral.identifier.uuidString
-    guard let promise = writePromise[deviceID] else { return }
+    let id = peripheral.identifier.uuidString
     if let error {
-      promise.reject(error)
+      writePromise.removeValue(forKey: id)?.reject(error)
     } else {
-      promise.resolve()
+      writePromise.removeValue(forKey: id)?.resolve()
     }
-    writePromise.removeValue(forKey: deviceID)
   }
 }

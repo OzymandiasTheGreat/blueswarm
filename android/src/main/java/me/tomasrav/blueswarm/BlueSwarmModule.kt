@@ -23,19 +23,19 @@ enum class BlueSwarmEvent(val value: String): Enumerable {
 class BlueSwarmModule : Module() {
   val context: Context
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
-  var server: BlueSwarmServer? = null
-  var client: BlueSwarmClient? = null
+  private var server: BlueSwarmServer? = null
+  private var client: BlueSwarmClient? = null
 
   override fun definition() = ModuleDefinition {
     Name("BlueSwarm")
 
     Events(
-            "client-data",
-            "server-connection",
-            "server-disconnect",
-            "server-data",
-            "client-connection",
-            "client-disconnect",
+      BlueSwarmEvent.SERVER_CONNECTION.value,
+      BlueSwarmEvent.SERVER_DISCONNECT.value,
+      BlueSwarmEvent.SERVER_DATA.value,
+      BlueSwarmEvent.CLIENT_CONNECTION.value,
+      BlueSwarmEvent.CLIENT_DISCONNECT.value,
+      BlueSwarmEvent.CLIENT_DATA.value,
     )
 
     AsyncFunction("initServer") { service: String, characteristic: String, promise: Promise ->

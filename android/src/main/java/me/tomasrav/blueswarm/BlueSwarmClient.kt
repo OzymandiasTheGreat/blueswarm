@@ -2,6 +2,7 @@ package me.tomasrav.blueswarm
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
@@ -43,13 +44,13 @@ class BlueSwarmClient(private val module: BlueSwarmModule, private val serviceUU
     override fun onScanResult(callbackType: Int, result: ScanResult?) {
       super.onScanResult(callbackType, result)
       scanning = true
-      if (result == null || result.device.name == null) {
+      if (result == null || result.device.address == null) {
         return
       }
       val id = result.device.address
       if (!discovered.contains(id)) {
         discovered.add(id)
-        result.device.connectGatt(module.context, false, gattCallback)
+        result.device.connectGatt(module.context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
       }
     }
   }

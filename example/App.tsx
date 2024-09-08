@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { PermissionsAndroid, Platform, StyleSheet, Text, View } from 'react-native'
+import React, { useEffect, useState } from "react"
+import { PermissionsAndroid, Platform, StyleSheet, Text, View } from "react-native"
 import b4a from "b4a"
 import BlueSwarm from "blueswarm"
 
@@ -35,6 +35,8 @@ export default function App() {
         } else {
           setGranted(true)
         }
+      } else {
+        setGranted(true)
       }
     })()
   }, [])
@@ -48,7 +50,7 @@ export default function App() {
         socket.on("error", console.error)
         socket.on("data", (data) => {
           const payload = PAYLOADS[index++]
-          console.log(`DATA ${data.length} valid ${payload ? b4a.equals(data, payload) : null} client ${socket.client}`)
+          console.log(`${Platform.OS} DATA ${data.length} valid ${payload ? b4a.equals(data, payload) : null} client ${socket.client}`)
         })
         for (const payload of PAYLOADS) {
           socket.write(payload)
@@ -56,21 +58,23 @@ export default function App() {
       })
       swarm.ready().then(() => swarm?.join())
     }
-    return () => { swarm?.close() }
+    return () => {
+      swarm?.close()
+    }
   }, [granted])
 
   return (
     <View style={styles.container}>
       <Text>Hello, World! 👋</Text>
     </View>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
   },
-});
+})

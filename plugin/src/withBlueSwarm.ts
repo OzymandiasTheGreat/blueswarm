@@ -1,6 +1,6 @@
 import { ConfigPlugin, IOSConfig, createRunOncePlugin, withInfoPlist } from "@expo/config-plugins"
 
-const pkg = require("blueswarm/package.json")
+const pkg = require("../../package.json")
 
 const PERIPHERAL_USAGE = "Allow $(PRODUCT_NAME) to connect to Bluetooth LE devices"
 

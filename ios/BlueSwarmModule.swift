@@ -2,116 +2,87 @@ import CoreBluetooth
 import ExpoModulesCore
 
 enum BlueSwarmEvent: String, Enumerable {
-  case SERVER_CONNECTED = "serverConnected"
-  case SERVER_DISCONNECTED = "serverDisconnected"
-  case SERVER_WRITE_REQUEST = "serverWriteRequest"
-  case CLIENT_DEVICE_DISCOVERED = "clientDeviceDiscovered"
-  case CLIENT_CONNECTED = "clientConnected"
-  case CLIENT_DISCONNECTED = "clientDisconnected"
-  case CLIENT_NOTIFIED = "clientNotified"
+   case SERVER_CONNECTION = "server-connection"
+   case SERVER_DISCONNECT = "server-disconnect"
+   case SERVER_DATA = "server-data"
+   case CLIENT_CONNECTION = "client-connection"
+   case CLIENT_DISCONNECT = "client-disconnect"
+   case CLIENT_DATA = "client-data"
 }
 
 public class BlueSwarmModule: Module {
   private var server: BlueSwarmServer? = nil
   private var client: BlueSwarmClient? = nil
-  
-  public func isConnecting(deviceID: String) -> Bool {
-    return client?.isConnecting(deviceID: deviceID) == true
-  }
-  
-  public func isConnected(deviceID: String) -> Bool {
-    return server?.isConnected(deviceID: deviceID) == true || client?.isConnected(deviceID: deviceID) == true
-  }
-  
+
   public func definition() -> ModuleDefinition {
     Name("BlueSwarm")
-
+    
     Events(
-      "serverConnected",
-      "serverDisconnected",
-      "serverWriteRequest",
-      "clientDeviceDiscovered",
-      "clientConnected",
-      "clientDisconnected",
-      "clientNotified"
+      BlueSwarmEvent.SERVER_CONNECTION.rawValue,
+      BlueSwarmEvent.SERVER_DISCONNECT.rawValue,
+      BlueSwarmEvent.SERVER_DATA.rawValue,
+      BlueSwarmEvent.CLIENT_CONNECTION.rawValue,
+      BlueSwarmEvent.CLIENT_DISCONNECT.rawValue,
+      BlueSwarmEvent.CLIENT_DATA.rawValue
     )
     
-    Property("isInitialized") { () -> Bool in
-      return server != nil || client != nil
-    }
-    
-    Property("isAdvertising") { () -> Bool in
-      return server?.isAdvertising() ?? false
-    }
-    
-    Property("isScanning") { () -> Bool in
-      return client?.isScanning() ?? false
-    }
-
-    AsyncFunction("initializeServer") { (serviceUUID: String, characteristicUUID: String, promise: Promise) in
+    AsyncFunction("initServer") { (serviceUUID: String, characteristicUUID: String, promise: Promise) in
       let service = CBUUID(string: serviceUUID)
       let characteristic = CBUUID(string: characteristicUUID)
-      if (server == nil) { server = BLESwarmServer(module: self, serviceUUID: service, characteristicUUID: characteristic, promise: promise) }
+      if (server == nil) { server = BlueSwarmServer(module: self, serviceUUID: service, characteristicUUID: characteristic, promise: promise) }
     }
     
-    Function("closeServer") {
+    AsyncFunction("initClient") { (serviceUUID: String, characteristicUUID: String, promise: Promise) in
+      let service = CBUUID(string: serviceUUID)
+      let characteristic = CBUUID(string: characteristicUUID)
+      if (client == nil) { client = BlueSwarmClient(module: self, serviceUUID: service, characteristicUUID: characteristic, promise: promise) }
+    }
+    
+    Function("close") {
       server?.close()
       server = nil
-    }
-    
-    AsyncFunction("initializeClient") { (serviceUUID: String, characteristicUUID: String, promise: Promise) in
-      let service = CBUUID(string: serviceUUID)
-      let characteristic = CBUUID(string: characteristicUUID)
-      if (client == nil) { client = BLESwarmClient(module: self, serviceUUID: service, characteristicUUID: characteristic, promise: promise) }
-    }
-    
-    Function("closeClient") {
       client?.close()
       client = nil
     }
     
-    Function("isConnecting") { (deviceID: String) -> Bool in
-      return isConnecting(deviceID: deviceID)
+    Function("isAdvertising") {
+      return server?.advertising == true
     }
     
-    Function("isConnected") { (deviceID: String) -> Bool in
-      return isConnected(deviceID: deviceID)
+    Function("isScanning") {
+      return client?.scanning == true
     }
     
-    Function("startAdvertising") {
-      server?.startAdvertising()
+    Function("serverAdvertise") {
+      server?.advertise()
     }
     
-    Function("stopAdvertising") {
-      server?.stopAdvertising()
+    Function("serverStop") {
+      server?.stop()
     }
     
-    Function("cancelServerConnection") { (deviceID: String) in
-      server?.disconnect(deviceID: deviceID)
+    Function("serverDisconnect") { (identifier: String) in
+      server?.disconnect(identifier: identifier)
     }
     
-    AsyncFunction("notify") { (deviceID: String, data: Data, promise: Promise) in
-      server?.notify(deviceID: deviceID, data: data, promise: promise)
+    AsyncFunction("serverNotify") { (identifier: String, data: Data, promise: Promise) in
+      server?.notify(identifier: identifier, data: data, promise: promise)
     }
     
-    Function("startScan") {
-      client?.startScan()
+    Function("clientScan") {
+      client?.scan()
     }
     
-    Function("stopScan") {
-      client?.stopScan()
+    Function("clientStop") {
+      client?.stop()
     }
     
-    Function("connect") { (deviceID: String) in
-      client?.connect(deviceID: deviceID)
+    Function("clientDisconnect") { (identifier: String) in
+      client?.disconnect(identifier: identifier)
     }
     
-    Function("disconnect") { (deviceID: String) in
-      client?.disconnect(deviceID: deviceID)
-    }
-    
-    AsyncFunction("write") { (deviceID: String, data: Data, promise: Promise) in
-      client?.write(deviceID: deviceID, data: data, promise: promise)
+    AsyncFunction("clientWrite") { (identifier: String, data: Data, promise: Promise) in
+      client?.write(identifier: identifier, data: data, promise: promise)
     }
   }
 }
