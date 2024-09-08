@@ -16,7 +16,8 @@ swarm.on("connection", (socket) => {
 
 await swarm.ready()
 
-swarm.join({ advertise: true, scan: true })
+const client = Math.random() < 0.5
+swarm.join({ advertise: !client, scan: client })
 
 // When you're done
 await swarm.close()
@@ -57,6 +58,9 @@ Initialize the swarm. Must be called once on startup. The swarm won't initiate o
 Close all active connections and free up resources. The swarm cannot be used after calling this.
 
 ### `swarm.join({ advertise = true, scan = true })`
+
+> Do not join in both advertising and scanning modes at the same time. This wastes battery and may cause connection issues,
+> especially if your peers are on both iOS and Android
 
 Join the swarm! Starts advertising this device as connectable and/or scanning for compatible devices to connect to.
 

@@ -56,7 +56,9 @@ export default function App() {
           socket.write(payload)
         }
       })
-      swarm.ready().then(() => swarm?.join())
+      const client = Math.random() < 0.5
+      console.log(Platform.OS, client ? "client" : "server")
+      swarm.ready().then(() => swarm?.join({ advertise: !client, scan: client }))
     }
     return () => {
       swarm?.close()
