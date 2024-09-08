@@ -1,6 +1,6 @@
 {
   "name": "blueswarm",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Find and connect to nearby peers over Bluetooth LE",
   "author": "Tomas Ravinskas <tomas@tomasrav.me> (https://tomasrav.me/)",
   "license": "MIT",
